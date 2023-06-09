@@ -166,7 +166,7 @@ func main() {
 
 ```
 
-PUT message format to test in Thunder Client: `{"message": "Hello server"}`
+PUT message format to test in Thunder Client: `{"message":"Hello server"}`
 
 ### db file
 
@@ -187,43 +187,77 @@ type thing struct {
 const thingTXT = "thing.txt"
 
 func main() {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		var t thing
-		if r.Method == http.MethodGet {
-			b, err := os.ReadFile(thingTXT)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			w.Write(b)
-			return
-		}
-		if r.Method == http.MethodPut {
-			err := json.NewDecoder(r.Body).Decode(&t)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			s, err := json.Marshal(&t)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			b := []byte(s)
-			os.WriteFile(thingTXT, b, 0644)
-			log.Printf("Got thing: %#v", t)
-			return
-		}
-		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-	})
+	http.HandleFunc("/", handleIndex)
 	http.ListenAndServe(":8080", nil)
 }
 
+func handleIndex(w http.ResponseWriter, r *http.Request) {
+	var t thing
+	if r.Method == http.MethodGet {
+		b, err := os.ReadFile(thingTXT)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Write(b)
+		return
+	}
+	if r.Method == http.MethodPut {
+		err := json.NewDecoder(r.Body).Decode(&t)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		s, err := json.Marshal(&t)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		b := []byte(s)
+		os.WriteFile(thingTXT, b, 0644)
+		log.Printf("Got thing: %#v", t)
+		return
+	}
+	http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+}
 ```
 
 ## part 2
 
-### test endpoint
+### test the endpoint
+
+```go
+package main
+
+import (
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func Test_handleIndex(t *testing.T) {
+	// given
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	// when
+	handleIndex(w, r)
+
+	//then
+	res := w.Result()
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		t.Errorf("Expected status code is 200, but got: %d", res.StatusCode)
+	}
+	b, _ := io.ReadAll(res.Body)
+	wantResBody := `{"message":"Hello server"}`
+	gotResBody := string(b)
+	if gotResBody != wantResBody {
+		t.Errorf("Want: %v, got: %v", wantResBody, gotResBody)
+	}
+}
+```
 
 ### router
 
