@@ -16,38 +16,44 @@ type thing struct {
 const thingTXT = "thing.txt"
 
 func main() {
-	r := chi.NewRouter()
-	r.Get("/", handleIndex)
-	r.Put("/", handleIndex)
-	http.ListenAndServe(":8080", r)
+	s := server{}
+	s.routes()
+	http.ListenAndServe(":8080", s.router)
 }
 
-func handleIndex(w http.ResponseWriter, r *http.Request) {
+type server struct {
+	router *chi.Mux
+}
+
+func (s *server) routes() {
+	s.router = chi.NewRouter()
+	s.router.Get("/", s.handleGet)
+	s.router.Put("/", s.handlePut)
+}
+
+func (s *server) handleGet(w http.ResponseWriter, r *http.Request) {
+	b, err := os.ReadFile(thingTXT)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(b)
+}
+
+func (s *server) handlePut(w http.ResponseWriter, r *http.Request) {
 	var t thing
-	if r.Method == http.MethodGet {
-		b, err := os.ReadFile(thingTXT)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Write(b)
+
+	err := json.NewDecoder(r.Body).Decode(&t)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if r.Method == http.MethodPut {
-		err := json.NewDecoder(r.Body).Decode(&t)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		s, err := json.Marshal(&t)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		b := []byte(s)
-		os.WriteFile(thingTXT, b, 0644)
-		log.Printf("Got thing: %#v", t)
+	str, err := json.Marshal(&t)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+	b := []byte(str)
+	os.WriteFile(thingTXT, b, 0644)
+	log.Printf("Got thing: %#v", t)
 }
