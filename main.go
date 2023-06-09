@@ -4,17 +4,32 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
 )
 
 type thing struct {
 	Message string `json:"message"`
 }
 
+const thingTXT = "thing.txt"
+
 func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		var t thing
 		if r.Method == http.MethodGet {
-			t := thing{
-				Message: "Hello world",
+			b, err := os.ReadFile(thingTXT)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Write(b)
+			return
+		}
+		if r.Method == http.MethodPut {
+			err := json.NewDecoder(r.Body).Decode(&t)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
 			}
 			s, err := json.Marshal(&t)
 			if err != nil {
@@ -22,16 +37,7 @@ func main() {
 				return
 			}
 			b := []byte(s)
-			w.Write(b)
-			return
-		}
-		if r.Method == http.MethodPut {
-			t := thing{}
-			err := json.NewDecoder(r.Body).Decode(&t)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
+			os.WriteFile(thingTXT, b, 0644)
 			log.Printf("Got thing: %#v", t)
 			return
 		}
