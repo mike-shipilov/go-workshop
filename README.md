@@ -26,6 +26,20 @@ Run with `go run main.go` or `go run .`
 
 ### hello function
 
+```go
+package main
+
+import "fmt"
+
+func main() {
+	hello()
+}
+
+func hello() {
+	fmt.Println("Hello world")
+}
+```
+
 ### go mod init
 
 ### hello server
