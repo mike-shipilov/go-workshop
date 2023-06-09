@@ -22,7 +22,7 @@ func main() {
 }
 ```
 
-Run with `go run main.go` or `go run .`
+Run with `go run main.go`
 
 ### hello function
 
@@ -41,6 +41,10 @@ func hello() {
 ```
 
 ### go mod init
+
+Run `go mod init github.com/mike-shipilov/go-workshop`
+
+Now it's possible to start the app with `go run .`
 
 ### hello server
 
