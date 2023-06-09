@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type thing struct {
@@ -14,8 +16,10 @@ type thing struct {
 const thingTXT = "thing.txt"
 
 func main() {
-	http.HandleFunc("/", handleIndex)
-	http.ListenAndServe(":8080", nil)
+	r := chi.NewRouter()
+	r.Get("/", handleIndex)
+	r.Put("/", handleIndex)
+	http.ListenAndServe(":8080", r)
 }
 
 func handleIndex(w http.ResponseWriter, r *http.Request) {
