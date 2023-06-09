@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -16,13 +17,48 @@ type thing struct {
 const thingTXT = "thing.txt"
 
 func main() {
-	s := server{}
+	s := server{
+		db: &dbFile{},
+	}
 	s.routes()
 	http.ListenAndServe(":8080", s.router)
 }
 
 type server struct {
+	db     db
 	router *chi.Mux
+}
+
+type db interface {
+	getThing() (*thing, error)
+	putThing(t *thing) error
+}
+
+type dbFile struct{}
+
+func (d *dbFile) getThing() (*thing, error) {
+	b, err := os.ReadFile(thingTXT)
+	if err != nil {
+		return nil, fmt.Errorf("reading file: %w", err)
+	}
+	var t thing
+	err = json.Unmarshal(b, &t)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshalling json: %w", err)
+	}
+	return &t, nil
+}
+
+func (d *dbFile) putThing(t *thing) error {
+	b, err := json.Marshal(t)
+	if err != nil {
+		return fmt.Errorf("marshalling json: %w", err)
+	}
+	err = os.WriteFile(thingTXT, b, 0644)
+	if err != nil {
+		return fmt.Errorf("writing file: %w", err)
+	}
+	return nil
 }
 
 func (s *server) routes() {
@@ -32,7 +68,12 @@ func (s *server) routes() {
 }
 
 func (s *server) handleGet(w http.ResponseWriter, r *http.Request) {
-	b, err := os.ReadFile(thingTXT)
+	t, err := s.db.getThing()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	b, err := json.Marshal(&t)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -42,18 +83,16 @@ func (s *server) handleGet(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) handlePut(w http.ResponseWriter, r *http.Request) {
 	var t thing
-
 	err := json.NewDecoder(r.Body).Decode(&t)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	str, err := json.Marshal(&t)
+	log.Printf("Got thing: %#v", t)
+	err = s.db.putThing(&t)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	b := []byte(str)
-	os.WriteFile(thingTXT, b, 0644)
-	log.Printf("Got thing: %#v", t)
+	w.Write([]byte("OK"))
 }

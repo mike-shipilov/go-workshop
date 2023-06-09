@@ -317,9 +317,9 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 
 ### server
 
-_main.go_
-
 ```go
+//main.go
+
 package main
 
 import (
@@ -381,9 +381,9 @@ func (s *server) handlePut(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-_main_test.go_
-
 ```go
+// main_test.go
+
 package main
 
 import (
@@ -420,7 +420,195 @@ func Test_handleIndex(t *testing.T) {
 }
 ```
 
-### dbFile
+### server.db
+
+```go
+//main.go
+
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+
+	"github.com/go-chi/chi/v5"
+)
+
+type thing struct {
+	Message string `json:"message"`
+}
+
+const thingTXT = "thing.txt"
+
+func main() {
+	s := server{
+		db: &dbFile{},
+	}
+	s.routes()
+	http.ListenAndServe(":8080", s.router)
+}
+
+type server struct {
+	db     db
+	router *chi.Mux
+}
+
+type db interface {
+	getThing() (*thing, error)
+	putThing(t *thing) error
+}
+
+type dbFile struct{}
+
+func (d *dbFile) getThing() (*thing, error) {
+	b, err := os.ReadFile(thingTXT)
+	if err != nil {
+		return nil, fmt.Errorf("reading file: %w", err)
+	}
+	var t thing
+	err = json.Unmarshal(b, &t)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshalling json: %w", err)
+	}
+	return &t, nil
+}
+
+func (d *dbFile) putThing(t *thing) error {
+	b, err := json.Marshal(t)
+	if err != nil {
+		return fmt.Errorf("marshalling json: %w", err)
+	}
+	err = os.WriteFile(thingTXT, b, 0644)
+	if err != nil {
+		return fmt.Errorf("writing file: %w", err)
+	}
+	return nil
+}
+
+func (s *server) routes() {
+	s.router = chi.NewRouter()
+	s.router.Get("/", s.handleGet)
+	s.router.Put("/", s.handlePut)
+}
+
+func (s *server) handleGet(w http.ResponseWriter, r *http.Request) {
+	t, err := s.db.getThing()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	b, err := json.Marshal(&t)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(b)
+}
+
+func (s *server) handlePut(w http.ResponseWriter, r *http.Request) {
+	var t thing
+	err := json.NewDecoder(r.Body).Decode(&t)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	log.Printf("Got thing: %#v", t)
+	err = s.db.putThing(&t)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write([]byte("OK"))
+}
+```
+
+```go
+// main_test.go
+
+package main
+
+import (
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+type dbMock struct {
+	thing *thing
+}
+
+func (d *dbMock) getThing() (*thing, error) {
+	return d.thing, nil
+}
+
+func (d *dbMock) putThing(t *thing) error {
+	return nil
+}
+
+func Test_server_handleGet(t *testing.T) {
+	// setup
+	s := server{
+		db: &dbMock{thing: &thing{Message: "Hello server"}},
+	}
+	s.routes()
+
+	// given
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	// when
+	s.router.ServeHTTP(w, r)
+
+	//then
+	res := w.Result()
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		t.Fatalf("Expected status code is 200, but got: %d", res.StatusCode)
+	}
+	b, _ := io.ReadAll(res.Body)
+	wantResBody := `{"message":"Hello server"}`
+	gotResBody := string(b)
+	if gotResBody != wantResBody {
+		t.Fatalf("Want: %v, got: %v", wantResBody, gotResBody)
+	}
+}
+
+func Test_server_handlePut(t *testing.T) {
+	// setup
+	s := &server{
+		db: &dbMock{},
+	}
+	s.routes()
+
+	// given
+	reqBody := strings.NewReader(`{"message":"Hello server"}`)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPut, "/", reqBody)
+
+	// when
+	s.router.ServeHTTP(w, r)
+
+	// then
+	res := w.Result()
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		t.Fatalf("Expected status code is 200, but got: %d", res.StatusCode)
+	}
+	resBody, _ := io.ReadAll(res.Body)
+	wantResBody := "OK"
+	gotResBody := string(resBody)
+	if !reflect.DeepEqual(gotResBody, wantResBody) {
+		t.Fatalf("Want: %v, got: %v", wantResBody, gotResBody)
+	}
+}
+
+```
 
 ### thing interface
 
